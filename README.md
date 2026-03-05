@@ -67,7 +67,3 @@ python cbt_diary.py
 [GNU General Public License v3 (GPLv3)]
 
 ```
-
-Would you like me to write up a short project description that you can use on your portfolio website to accompany this repository?
-
-```
