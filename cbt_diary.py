@@ -2,8 +2,10 @@
 
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 import json
+import csv
+import io
 import os
 from datetime import datetime
 
@@ -496,6 +498,12 @@ class CBTDiaryApp:
         header.pack(fill="x", pady=(20, 10), padx=20)
         tk.Label(header, text="Your Diary", font=("Segoe UI", 16, "bold"), bg=COLORS["bg_app"]).pack(side="left")
 
+        if self.entries:
+            export_btn = tk.Button(header, text="Export", bg=COLORS["primary"], fg="white",
+                                   font=("Segoe UI", 10, "bold"), bd=0, padx=15, pady=5,
+                                   cursor="hand2", command=self.show_export_dialog)
+            export_btn.pack(side="right")
+
         if not self.entries:
             tk.Label(self.content_frame, text="No entries yet.", bg=COLORS["bg_app"], fg=COLORS["text_muted"]).pack(pady=50)
             return
@@ -644,6 +652,130 @@ class CBTDiaryApp:
 
         section("The Challenge", entry.get('challenge', ''), "ℹ️", "#eff6ff", COLORS["primary"])
         section("Balanced View", entry.get('reframe', ''), "🙂", "#ecfdf5", COLORS["secondary"])
+
+    # --- EXPORT FUNCTIONALITY ---
+
+    def show_export_dialog(self):
+        if not self.entries:
+            messagebox.showinfo("Export", "No entries to export.")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Export Diary")
+        dialog.geometry("350x250")
+        dialog.resizable(False, False)
+        dialog.configure(bg=COLORS["bg_app"])
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(dialog, text="Export Diary Entries", font=("Segoe UI", 14, "bold"),
+                 bg=COLORS["bg_app"], fg=COLORS["text_main"]).pack(pady=(20, 5))
+        tk.Label(dialog, text="Choose an export format:", font=("Segoe UI", 10),
+                 bg=COLORS["bg_app"], fg=COLORS["text_muted"]).pack(pady=(0, 15))
+
+        btn_frame = tk.Frame(dialog, bg=COLORS["bg_app"])
+        btn_frame.pack(fill="x", padx=30)
+
+        def make_btn(text, cmd):
+            b = ttk.Button(btn_frame, text=text, style="Primary.TButton",
+                           command=lambda: [dialog.destroy(), cmd()])
+            b.pack(fill="x", pady=5)
+
+        make_btn("CSV Spreadsheet (.csv)", self.export_csv)
+        make_btn("JSON (.json)", self.export_json)
+        make_btn("Plain Text (.txt)", self.export_text)
+
+    def export_csv(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            title="Export as CSV"
+        )
+        if not path:
+            return
+
+        with open(path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "Date", "Initial Mood", "Negative Thought",
+                "Cognitive Distortions", "Challenge", "Balanced Perspective",
+                "Final Mood"
+            ])
+            for entry in self.entries:
+                date_str = datetime.fromisoformat(entry['timestamp']).strftime("%Y-%m-%d %H:%M")
+                initial = entry.get('initialMood', {}).get('label', '')
+                final = entry.get('finalMood', {}).get('label', '')
+                distortions = "; ".join(entry.get('distortions', []))
+                writer.writerow([
+                    date_str, initial, entry.get('thought', ''),
+                    distortions, entry.get('challenge', ''),
+                    entry.get('reframe', ''), final
+                ])
+
+        messagebox.showinfo("Exported", f"Diary exported to:\n{path}")
+
+    def export_json(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Export as JSON"
+        )
+        if not path:
+            return
+
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(self.entries, f, indent=4, ensure_ascii=False)
+
+        messagebox.showinfo("Exported", f"Diary exported to:\n{path}")
+
+    def export_text(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            title="Export as Text"
+        )
+        if not path:
+            return
+
+        lines = []
+        lines.append("CBT THOUGHT DIARY")
+        lines.append("=" * 50)
+        lines.append("")
+
+        for i, entry in enumerate(self.entries, 1):
+            date_str = datetime.fromisoformat(entry['timestamp']).strftime("%A, %B %d, %Y at %I:%M %p")
+            initial = entry.get('initialMood', {})
+            final = entry.get('finalMood', {})
+
+            lines.append(f"Entry #{i}")
+            lines.append(f"Date: {date_str}")
+            lines.append(f"Initial Mood: {initial.get('emoji', '')} {initial.get('label', '')}")
+            lines.append("")
+            lines.append("Negative Thought:")
+            lines.append(entry.get('thought', ''))
+            lines.append("")
+
+            dists = entry.get('distortions', [])
+            if dists:
+                lines.append("Cognitive Distortions:")
+                for d in dists:
+                    lines.append(f"  - {d}")
+                lines.append("")
+
+            lines.append("Challenge:")
+            lines.append(entry.get('challenge', ''))
+            lines.append("")
+            lines.append("Balanced Perspective:")
+            lines.append(entry.get('reframe', ''))
+            lines.append("")
+            lines.append(f"Final Mood: {final.get('emoji', '')} {final.get('label', '')}")
+            lines.append("-" * 50)
+            lines.append("")
+
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write("\n".join(lines))
+
+        messagebox.showinfo("Exported", f"Diary exported to:\n{path}")
 
     def delete_entry(self, entry):
         if messagebox.askyesno("Delete", "Are you sure you want to delete this entry?"):
